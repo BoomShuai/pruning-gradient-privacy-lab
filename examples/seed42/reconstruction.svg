@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="410" viewBox="0 0 700 410">
+<rect width="700" height="410" fill="white"/>
+<g font-family="sans-serif" font-size="13" fill="#222">
+<text x="75" y="27" font-size="18">Synthetic gradient reconstruction</text>
+<text x="75" y="50">Mean relative L2 error; 100 Adam updates; 3 trials</text>
+<path d="M75 80V320H605" fill="none" stroke="#333"/>
+<text x="65" y="324.0" text-anchor="end">0.00</text>
+<text x="65" y="277.0" text-anchor="end">0.26</text>
+<text x="65" y="230.0" text-anchor="end">0.51</text>
+<text x="65" y="183.0" text-anchor="end">0.77</text>
+<text x="65" y="136.0" text-anchor="end">1.03</text>
+<text x="65" y="89.0" text-anchor="end">1.28</text>
+<text x="75.0" y="341" text-anchor="middle">0</text>
+<text x="207.5" y="341" text-anchor="middle">0.25</text>
+<text x="340.0" y="341" text-anchor="middle">0.5</text>
+<text x="472.5" y="341" text-anchor="middle">0.75</text>
+<text x="605.0" y="341" text-anchor="middle">1</text>
+<polyline points="75.0,116.7 207.5,306.0 340.0,318.1 472.5,304.8 605.0,319.3" fill="none" stroke="#1460aa" stroke-width="2"/>
+<circle cx="75.0" cy="116.7" r="4" fill="#1460aa"/>
+<circle cx="207.5" cy="306.0" r="4" fill="#1460aa"/>
+<circle cx="340.0" cy="318.1" r="4" fill="#1460aa"/>
+<circle cx="472.5" cy="304.8" r="4" fill="#1460aa"/>
+<circle cx="605.0" cy="319.3" r="4" fill="#1460aa"/>
+<text x="90" y="385" fill="#1460aa">taylor</text>
+<polyline points="75.0,116.7 207.5,286.0 340.0,305.4 472.5,303.6 605.0,319.3" fill="none" stroke="#c34325" stroke-width="2"/>
+<circle cx="75.0" cy="116.7" r="4" fill="#c34325"/>
+<circle cx="207.5" cy="286.0" r="4" fill="#c34325"/>
+<circle cx="340.0" cy="305.4" r="4" fill="#c34325"/>
+<circle cx="472.5" cy="303.6" r="4" fill="#c34325"/>
+<circle cx="605.0" cy="319.3" r="4" fill="#c34325"/>
+<text x="260" y="385" fill="#c34325">magnitude</text>
+<polyline points="75.0,116.7 207.5,115.7 340.0,304.7 472.5,319.3 605.0,319.3" fill="none" stroke="#20844d" stroke-width="2"/>
+<circle cx="75.0" cy="116.7" r="4" fill="#20844d"/>
+<circle cx="207.5" cy="115.7" r="4" fill="#20844d"/>
+<circle cx="340.0" cy="304.7" r="4" fill="#20844d"/>
+<circle cx="472.5" cy="319.3" r="4" fill="#20844d"/>
+<circle cx="605.0" cy="319.3" r="4" fill="#20844d"/>
+<text x="430" y="385" fill="#20844d">random</text>
+<text x="340" y="363" text-anchor="middle">Requested retention fraction</text>
+</g></svg>

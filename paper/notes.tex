@@ -1,0 +1,630 @@
+\documentclass[conference,a4paper]{IEEEtran}
+
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\setmainfont{TeX Gyre Termes}
+\setCJKmainfont{FandolSong-Regular}[BoldFont=FandolSong-Bold]
+\setCJKsansfont{FandolHei-Regular}[BoldFont=FandolHei-Bold]
+\setCJKmonofont{FandolFang-Regular}
+
+\usepackage{amsmath,amssymb,mathtools,bm}
+\usepackage{booktabs,tabularx,array,multirow}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc}
+\usepackage{cite}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\newtheorem{theorem}{定理}
+\newtheorem{proposition}{命题}
+\newtheorem{remark}{注}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\inner}[2]{\left\langle #1,#2\right\rangle}
+\newcommand{\norm}[1]{\left\lVert #1\right\rVert}
+\newcommand{\MDL}{\mathrm{MDL}}
+\newcommand{\ST}{\mathrm{S}_{T}}
+\newcommand{\HT}{\mathrm{H}_{T}}
+\newcommand{\ASR}{\mathrm{ASR}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\rank}{\operatorname{rank}}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+\renewcommand{\abstractname}{摘\quad 要}
+\renewcommand{\IEEEkeywordsname}{关键词}
+\renewcommand{\figurename}{图}
+\renewcommand{\tablename}{表}
+\renewcommand{\refname}{参考文献}
+\urlstyle{same}
+\hypersetup{
+  pdftitle={重要梯度是否泄漏更多？——敏感度剪枝、Wanda 与计算受限梯度反演的 Epiplexity 分析},
+  pdfsubject={模型剪枝、梯度反演与条件时间有界最小描述长度}
+}
+
+\title{重要梯度是否泄漏更多？\\
+\large 敏感度剪枝、Wanda 与计算受限梯度反演的 Epiplexity 分析}
+
+\author{\IEEEauthorblockN{Pruning Gradient Privacy Lab contributors}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+模型剪枝用少量参数近似原模型，而梯度反演利用训练梯度恢复私有样本；二者都依赖参数或梯度中信息的非均匀分布。本文给出三项相互衔接的理论结果。第一，使用掩码扰动和梯度 Lipschitz 条件，对剪枝损失的一阶 Taylor 近似给出显式二阶余项界，并说明驻点处必须转向二阶分析。第二，对线性层严格推出一阶分数 $|W_{ij}|\,|\delta_i^\top x_j|$；在固定输出行内，Wanda 分数 $|W_{ij}|\norm{x_j}_2$ 与一个含公共反传因子的 Cauchy--Schwarz 上界同序。在固定校准激活且仅删除一个权重时，它精确等于层输出扰动范数，而非任意全局损失下的敏感度恒等式。第三，引入敏感度 Top-$\rho$ 梯度观测 $G_\rho$，研究固定攻击预算 $T$ 下的条件 epiplexity 与时间有界熵。可证明的是总条件时间有界最小描述长度在嵌套观测和投影开销意义下非增；两个分量本身并无普适单调性。本文进一步提出 Jacobian 可识别性相变、攻击成功率联系、同一程序的两部码估计与 prequential 总码长检查，以及 $\rho\times T$ 实验协议，并讨论掩码侧信道和面向记忆管理的扩展。
+\end{abstract}
+
+\begin{IEEEkeywords}
+模型剪枝，梯度反演，Wanda，epiplexity，时间有界熵，最小描述长度
+\end{IEEEkeywords}
+
+\section*{English Abstract}
+Model pruning and gradient inversion both exploit the non-uniform distribution of information across model coordinates. This paper develops a unified theoretical treatment. First, it derives the first-order Taylor pruning score with an explicit second-order remainder under a Lipschitz-gradient assumption and identifies the stationary-point regime in which second-order analysis is necessary. Second, for a linear layer it shows that the exact first-order score is $|W_{ij}|\,|\delta_i^{\top}x_j|$. Within a fixed output row, the Wanda score $|W_{ij}|\norm{x_j}_2$ ranks a Cauchy--Schwarz upper bound up to a common backpropagated-gradient factor. With fixed calibration activations and one removed weight, it is exactly the norm of the resulting layer-output perturbation, not the loss change for an arbitrary objective. Third, the paper studies sensitivity-ranked Top-$\rho$ gradient observations under a fixed attack budget $T$ through conditional epiplexity and time-bounded entropy. Only their sum, the conditional time-bounded minimum description length, is approximately monotone under nested post-hoc masks and projection overhead. Neither component has a universal monotonicity law, and the MDL-optimal conditional model can switch discontinuously. A Jacobian-based phase-transition hypothesis, an operational link to reconstruction success, a same-program two-part estimator with a prequential total-code check, and a reproducible $\rho\times T$ evaluation protocol are proposed.
+
+\noindent\textbf{Keywords:} model pruning, gradient inversion, Wanda, epiplexity, time-bounded entropy, minimum description length.
+
+\noindent\textbf{公开版本状态：}本文是理论研究笔记与待验证的实验协议。仓库中的 NumPy 示例仅验证二次损失的 Taylor 余项、线性层 Wanda 的局部解释，并在合成单样本线性回归中进行梯度匹配。示例预算是优化迭代次数，不是本文建议的 FLOPs 预算。CIFAR-10、DLG/iDLG、感知指标、条件编码器与 $S_T/H_T/L_T$ 测量均未实现或运行。代码输出不能作为这些研究假设的实证验证。
+
+\section{引言}
+
+剪枝的基本问题是：删除哪些参数，才能以最小性能损失换取存储和计算收益。Optimal Brain Damage（OBD）和 Optimal Brain Surgeon（OBS）分别以 Hessian 对角项和逆 Hessian 描述局部显著度\cite{lecun1989obd,hassibi1993obs}。一阶 Taylor 方法改用权重与梯度的乘积估计删除参数后的损失变化，避免显式求逆\cite{molchanov2019importance}。对大语言模型，激活值跨特征维度可相差多个数量级\cite{sun2024massive}，Wanda 因而把权重幅值与输入特征范数相乘，只需一次前向传播即可排序\cite{sun2024wanda}。
+
+梯度同时也是隐私载体。DLG 通过匹配观测梯度联合优化虚拟输入和标签\cite{zhu2019dlg}；iDLG 在特定交叉熵设置下解析恢复标签\cite{zhao2020idlg}；基于余弦匹配和图像先验的攻击可处理更深网络与高分辨率样本\cite{geiping2020inverting,yin2021gradinversion}。近期结果还表明，单个 Transformer 组件的部分梯度就可能泄漏训练数据\cite{li2024partial}，而 ReLU 诱导的稀疏结构甚至可被用于批量精确恢复\cite{dimitrov2024spear}。因此，“稀疏”并不自动等于“安全”。
+
+上述两条研究线索提出一个直接问题：对训练最重要的梯度坐标，是否也对反演最有价值？传统 Shannon 信息不区分无限计算下存在的信息与给定预算内可提取的信息。Finzi 等人提出 epiplexity，将时间有界最小描述长度分解为可由受限观察者吸收的结构信息 $\ST$ 与仍不可预测的随机信息 $\HT$\cite{finzi2026epiplexity}。该分解适合描述固定攻击预算 $T$ 下，梯度保留率 $\rho$ 如何改变可学习结构与剩余不确定性。
+
+本文的贡献如下：
+\begin{itemize}
+  \item 给出从 $\Omega(w)=|L(W)-L(W-w)|$ 到 $|w^\top\nabla_WL(W)|$ 的完整推导、余项界及一阶失效条件；
+  \item 从反向传播严格分离 Wanda 的等式、上界和统计假设，并给出不能无条件等同于全局损失敏感度的反例；
+  \item 对条件 $\ST(X\mid G_\rho)$、$\HT(X\mid G_\rho)$ 给出可证的总 MDL 单调命题、分量非单调机制、Jacobian 相变和可复现实验框架。
+\end{itemize}
+
+本文是理论分析与实验设计稿，不虚构尚未执行的数值结果。所有关于曲线形状的陈述均以命题、条件结论或可证伪假设呈现。
+
+\section{相关工作}
+
+\subsection{剪枝敏感度与局部重构}
+
+OBD 在训练驻点附近忽略 Hessian 非对角项，以 $H_{ii}W_i^2/2$ 近似删除单个权重的损失增量；OBS 保留参数相关性，并允许未删除参数补偿\cite{lecun1989obd,hassibi1993obs}。Taylor 剪枝直接估计参数、神经元或滤波器对最终损失的贡献\cite{molchanov2019importance}。SparseGPT 将大模型剪枝写成逐层稀疏回归与局部输出重构问题\cite{frantar2023sparsegpt}。Wanda 在相同局部视角下保留大激活特征对应的权重，核心分数为 $|W_{ij}|\norm{x_j}_2$，并按输出行比较\cite{sun2024wanda}。这些分数衡量训练损失或前向输出变化，不应未经证明就解释为隐私泄漏分数。
+
+\subsection{梯度反演及稀疏观测}
+
+协同学习中的生成式泄漏攻击早于直接梯度匹配方法\cite{hitaj2017gan}。DLG、iDLG、Geiping 攻击和 GradInversion 逐步放宽了网络深度、标签未知、高分辨率与较大批量等限制\cite{zhu2019dlg,zhao2020idlg,geiping2020inverting,yin2021gradinversion}。理论工作也已在特定网络与激活假设下证明单次梯度查询的可识别性和高效恢复\cite{wang2023provably}。系统评估表明，攻击结果高度依赖模型状态、批量大小、先验、攻击者可见信息与计算开销\cite{huang2021evaluating}。这要求以实际前向--反向等价 FLOPs，而不是优化器迭代数，定义攻击预算。
+
+把梯度压缩或稀疏化当作隐私防御仍属启发式机制。Soteria 从表示泄漏出发选择并扰动敏感表示分量\cite{sun2021soteria}；Generative Gradient Leakage 对噪声和梯度压缩等退化机制进行审计，表明生成先验在部分设置下可补偿被删除的信息\cite{li2022auditing}。因此，稀疏观测下某个固定攻击失败并不构成隐私保证；需要把掩码、数值、攻击先验和自适应预算一起审计。
+
+\subsection{Epiplexity}
+
+对随机变量 $X$，epiplexity 选择一个运行时间不超过 $T$ 的概率程序 $P$，最小化程序长度与数据负对数似然之和\cite{finzi2026epiplexity}。该理论明确允许条件变量，并推荐用 prequential 或 requential coding 近似不可计算的程序搜索。Epiplexity 是观察者相关的信息度量，不是隐私保证；尤其不能仅凭 $\ST$ 高低判断是否容易恢复。本文把观测变量具体化为稀疏梯度数值、支持集和公共模型上下文，从而把信息分解与反演任务对齐。
+
+\section{预备定义与问题设置}
+
+\subsection{剪枝掩码}
+
+令 $W\in\R^d$ 表示向量化模型参数，$S\subseteq\{1,\ldots,d\}$ 为待剪坐标。定义二值掩码 $M_S$ 和零填充向量
+\begin{equation}
+U_S=M_S\odot W,\qquad W^{(-S)}=W-U_S .
+\label{eq:mask}
+\end{equation}
+因此 $U_S$ 与 $W$ 同维，只在 $S$ 上保留原值。记号中的子向量 $w$ 应理解为 $U_S$ 的非零部分嵌回全参数空间，否则 $w^\top\nabla_WL$ 存在维数歧义。
+
+\subsection{\texorpdfstring{敏感度 Top-$\rho$ 梯度}{敏感度 Top-rho 梯度}}
+
+令 $x$ 为输入、$y$ 为标签。在标签已知条件中定义私有记录 $X=x$ 并将 $y$ 纳入攻击者上下文；标签未知时令 $X=(x,y)$。$X$ 均是按公开精度表示的有限二进制记录。公共上下文为
+\begin{equation}
+C=(W,\text{architecture},L,\text{step},\text{mask rule},Q_b),
+\end{equation}
+其中 $Q_b$ 是对所有条件相同的 $b$-bit 量化器；标签已知时 $C$ 还包含当前 $y$。区分量化前的连续梯度 $G^{\rm c}=\nabla_WL(W;x,y)$ 与传输值 $\bar G=Q_b(G^{\rm c})$。本文先在 $G^{\rm c}$ 上排序，再量化被保留的数值；一阶坐标敏感度为
+\begin{equation}
+q_k=|W_kG^{\rm c}_k|.
+\label{eq:gradscore}
+\end{equation}
+取 $k_\rho=\lceil\rho d\rceil$ 个最高分坐标，采用确定性的并列规则，得到支持集 $I_\rho$ 和
+\begin{equation}
+G_\rho=(I_\rho,\{\bar G_k:k\in I_\rho\})
+=(M_\rho,M_\rho\odot\bar G).
+\label{eq:grho}
+\end{equation}
+支持集必须进入观测，因为逐样本 Top-$k$ 掩码本身依赖 $X$，可能形成侧信道。本文把 $\rho$ 始终定义为“保留率”，稀疏率为 $1-\rho$。理论式中 $X$ 默认为单条记录；操作化估计时将同一定义逐点应用于预注册序列 $X_{1:N}$，且 $S/H/L$ 始终指向同一序列和同一归一化分母。
+
+\subsection{条件时间有界 MDL}
+
+固定一台公共的前缀自由（prefix-free）通用机与编码语言，令 $\mathcal P_T^{G_\rho,C}$ 为其上的概率程序集合。对输出空间中位长为 $n$ 的记录，每个程序都须在 $T(n)\leq T$ 内完成两项操作：计算归一化条件概率质量 $P(x\mid G_\rho,C)$，以及从完全相同的分布 $P(\cdot\mid G_\rho,C)$ 采样。程序长度 $|P|$ 以 bit 计，因而不同条件下的 $|P|$ 及 $O(1)$ 包装开销可比。定义
+\begin{equation}
+P_{\rho,T}^{*}\in\arg\min_{P\in\mathcal P_T^{G_\rho,C}}
+\left\{|P|+\E[-\log_2P(X\mid G_\rho,C)]\right\},
+\label{eq:condmdl}
+\end{equation}
+本文假设该最小值可达到；若总码长存在多个最优程序，依次选择程序长度最短者和编码字典序最小者，使下面的分解唯一。令
+\begin{align}
+S_T(\rho)&=|P_{\rho,T}^{*}|,\\
+H_T(\rho)&=\E[-\log_2P_{\rho,T}^{*}(X\mid G_\rho,C)],\\
+L_T(\rho)&=S_T(\rho)+H_T(\rho).
+\label{eq:shl}
+\end{align}
+$L_T(\rho)=\MDL_T(X\mid G_\rho,C)$。这里 $H_T$ 是同一个 MDL 最优程序的交叉熵，一般不等于联合时间有界熵之差\cite{finzi2026epiplexity}。
+
+\section{从真实敏感度到一阶 Taylor 分数}
+
+定义集合 $S$ 的真实敏感度
+\begin{equation}
+\Omega(S)=|L(W)-L(W-U_S)|.
+\label{eq:trueomega}
+\end{equation}
+
+\begin{theorem}[带余项的一阶剪枝敏感度]
+若 $L$ 在路径 $\{W-tU_S:t\in[0,1]\}$ 上可微，且梯度为 $\beta$-Lipschitz，即
+\begin{equation}
+\norm{\nabla L(A)-\nabla L(B)}_2\leq\beta\norm{A-B}_2,
+\end{equation}
+则
+\begin{equation}
+\left|\Omega(S)-\left|\inner{\nabla L(W)}{U_S}\right|\right|
+\leq\frac{\beta}{2}\norm{U_S}_2^2.
+\label{eq:taylorbound}
+\end{equation}
+\end{theorem}
+
+\textit{证明：}令 $\phi(t)=L(W-tU_S)$。由微积分基本定理，
+\begin{align}
+L(W)-L(W-U_S)
+&=\int_0^1\inner{\nabla L(W-tU_S)}{U_S}\,dt\\
+&=\inner{\nabla L(W)}{U_S}+\varepsilon_S,
+\end{align}
+其中
+\begin{align}
+|\varepsilon_S|
+&\leq\int_0^1\norm{\nabla L(W-tU_S)-\nabla L(W)}_2
+\norm{U_S}_2dt\\
+&\leq\int_0^1\beta t\norm{U_S}_2^2dt
+=\frac{\beta}{2}\norm{U_S}_2^2.
+\end{align}
+对两端取绝对值，再用反三角不等式即得式~\eqref{eq:taylorbound}。向量化后
+\begin{equation}
+\inner{\nabla L(W)}{U_S}
+=\operatorname{vec}(U_S)^\top\operatorname{vec}(\nabla_WL(W)),
+\end{equation}
+忽略二阶余项得到
+\begin{equation}
+\boxed{\Omega(S)\approx|w^\top\nabla_WL(W)|.}
+\end{equation}
+证毕。
+
+更严格地，引入部分剪枝 $W(t)=W-tU_S$，并定义
+\begin{equation}
+\Omega_t(S):=|L(W)-L(W-tU_S)|,
+\end{equation}
+则有
+\begin{equation}
+\left|\Omega_t(S)-t\left|\inner{\nabla L(W)}{U_S}\right|\right|
+\leq\frac{\beta t^2}{2}\norm{U_S}_2^2.
+\end{equation}
+故一阶式是 $t\to0$ 的渐近结果；对完全置零 $t=1$，只有余项相对较小时才可靠。例如在一阶项非零时，一个直接的充分诊断条件是
+\begin{equation}
+\frac{\beta\norm{U_S}_2^2}
+{2|\inner{\nabla L(W)}{U_S}|}\ll1.
+\end{equation}
+
+当 $\inner{\nabla L(W)}{U_S}=0$ 时，一阶项失效。若 $L\in C^2$，则
+\begin{equation}
+\Omega_t(S)=\frac{t^2}{2}
+\left|U_S^\top\nabla^2L(W)U_S\right|+o(t^2),
+\end{equation}
+这解释了 OBD/OBS 在训练驻点附近使用二阶量的原因\cite{lecun1989obd,hassibi1993obs}。此外，对参数组通常有
+\begin{equation}
+\left|\sum_{k\in S}W_k\frac{\partial L}{\partial W_k}\right|
+\neq\sum_{k\in S}\left|W_k\frac{\partial L}{\partial W_k}\right|,
+\end{equation}
+后者只是忽略抵消后的上界。对 ReLU 等分段光滑网络，若剪枝路径跨越激活边界，必须采用方向导数或分段路径积分。
+
+\section{Wanda 分数的严格来源与近似条件}
+
+\subsection{反向传播给出的真实一阶项}
+
+考虑线性层
+\begin{equation}
+Z=XW^\top,
+\end{equation}
+其中 $X\in\R^{B\times d_{\rm in}}$ 汇集 $B$ 个样本或 token，$x_j=X_{:j}$。把后续网络和标量损失写成 $L(W)=F(Z)$，并令
+\begin{equation}
+\Delta=\nabla_ZF(Z),\qquad\delta_i=\Delta_{:i}.
+\end{equation}
+链式法则给出严格等式
+\begin{equation}
+\nabla_WL=\Delta^\top X,\qquad
+\frac{\partial L}{\partial W_{ij}}=\delta_i^\top x_j.
+\label{eq:backprop}
+\end{equation}
+删除单个权重相当于 $W'=W-W_{ij}E_{ij}$。因此由前述 Taylor 分析，真实的一阶 Taylor 分数是
+\begin{equation}
+T_{ij}=\left|W_{ij}\frac{\partial L}{\partial W_{ij}}\right|
+=|W_{ij}|\,|\delta_i^\top x_j|.
+\label{eq:truefirst}
+\end{equation}
+
+定义单权重的部分剪枝敏感度
+\begin{equation}
+\Omega_{ij}(t):=|L(W)-L(W-tW_{ij}E_{ij})|.
+\end{equation}
+若在相应输出线段上
+\begin{equation}
+\norm{\nabla_ZF(A)-\nabla_ZF(B)}_F
+\leq\beta_Z\norm{A-B}_F,
+\end{equation}
+则
+\begin{equation}
+\left|\Omega_{ij}(t)-t|W_{ij}|\,|\delta_i^\top x_j|\right|
+\leq\frac{\beta_Zt^2}{2}W_{ij}^2\norm{x_j}_2^2.
+\label{eq:layerremainder}
+\end{equation}
+
+\subsection{从一阶项到 Wanda 排序}
+
+由 Cauchy--Schwarz 不等式，
+\begin{equation}
+T_{ij}\leq\norm{\delta_i}_2\,|W_{ij}|\norm{x_j}_2.
+\label{eq:cswanda}
+\end{equation}
+定义方向因子
+\begin{equation}
+c_{ij}=\begin{cases}
+\dfrac{|\delta_i^\top x_j|}
+{\norm{\delta_i}_2\norm{x_j}_2},
+&\norm{\delta_i}_2\norm{x_j}_2>0,\\[1ex]
+0,&\text{其他情形},
+\end{cases}
+\end{equation}
+由 Cauchy--Schwarz 不等式有 $c_{ij}\in[0,1]$。和 Wanda 分数
+\begin{equation}
+S^{\mathrm{Wan}}_{ij}=|W_{ij}|\norm{x_j}_2,
+\label{eq:wanda}
+\end{equation}
+则
+\begin{equation}
+\boxed{T_{ij}=\norm{\delta_i}_2c_{ij}S^{\mathrm{Wan}}_{ij}
+\leq\norm{\delta_i}_2S^{\mathrm{Wan}}_{ij}.}
+\label{eq:wandadecomp}
+\end{equation}
+Wanda 按输出行 $i$ 比较权重\cite{sun2024wanda}。当 $\norm{\delta_i}_2>0$ 时，删除公共因子不改变式~\eqref{eq:cswanda} 所给上界的行内排序；但这并不保证真实 $T_{ij}$ 的排序不变，因为 $c_{ij}$ 仍随 $j$ 变化。进一步忽略该方向因子，才得到式~\eqref{eq:wanda}，这需要等角度、各向同性或经验上的排序稳定性假设。若 $\delta_i=0$，该行所有一阶分数均为零，Wanda 排序没有一阶 Taylor 依据。
+
+作为跨校准批次、标签或模型状态的辅助随机模型，若假设 $\delta_i\perp x_j$ 且 $\delta_i\sim\mathcal N(0,\sigma_i^2I_B)$，则
+\begin{align}
+\E[T_{ij}\mid x_j,W_{ij}]&=\sigma_i\sqrt{\frac{2}{\pi}}S^{\mathrm{Wan}}_{ij},\\
+\sqrt{\E[T_{ij}^2\mid x_j,W_{ij}]}&=\sigma_iS^{\mathrm{Wan}}_{ij}.
+\end{align}
+这给出跨上述随机性的期望或均方排序依据，而不是固定批次上的等式。真实反传误差通常依赖于 $X$，故独立性只能作为显式建模假设。
+
+\subsection{固定校准激活下的精确解释}
+
+固定校准激活 $X$ 和其余参数，仅剪掉 $W_{ij}$ 后，层输出扰动为
+\begin{equation}
+Z-Z'=W_{ij}x_je_i^\top,
+\end{equation}
+从而
+\begin{equation}
+\boxed{\norm{Z-Z'}_F=|W_{ij}|\norm{x_j}_2=S^{\mathrm{Wan}}_{ij}.}
+\label{eq:exactwanda}
+\end{equation}
+因此在这些结构条件下，Wanda 无需统计假设即精确度量单权重剪枝引起的线性层输出变化。若定义局部重构目标
+\begin{equation}
+Q(W')=\frac12\norm{XW^\top-XW'^\top}_F^2,
+\end{equation}
+则
+\begin{equation}
+Q(W-W_{ij}E_{ij})=\frac12W_{ij}^2\norm{x_j}_2^2
+=\frac12(S^{\mathrm{Wan}}_{ij})^2.
+\end{equation}
+平方是严格单调变换，故两种排序一致。注意 $Q$ 在未剪枝点的一阶导为零；Wanda 的平方来自这个目标的精确二次项，而不是其一阶 Taylor 项。这也对应 SparseGPT/OBS 局部重构分数在 $X^\top X$ 对角近似后的形式\cite{frantar2023sparsegpt,sun2024wanda}。
+
+多个特征同时删除时存在交叉项
+\begin{equation}
+\norm{\sum_{j\in S}W_{ij}x_j}_2^2
+=\sum_{j\in S}W_{ij}^2\norm{x_j}_2^2
++2\!\sum_{\substack{j,k\in S\\j<k}}W_{ij}W_{ik}x_j^\top x_k.
+\end{equation}
+若 $X^\top X$ 为对角阵，则选择最小 Wanda 分数严格最小化给定剪枝数量下的真实局部重构误差。若非对角，交叉项一般存在，独立 Wanda 排序只严格最小化对角代理，而不保证最小化原重构目标；特殊参数下的偶然抵消不影响这一一般性结论。
+
+\subsection{无条件等式不成立的反例}
+
+取标量层 $z=wx$，令 $w=x=1$，损失
+\begin{equation}
+L(w)=\tfrac12(wx-1)^2.
+\end{equation}
+当前点有 $dL/dw=0$，一阶 Taylor 分数为 $0$；Wanda 分数为 $1$；完全剪枝后的真实损失变化为 $1/2$。更一般地，把任意损失乘以正数 $c>0$ 会同比缩放真实敏感度和梯度分数，却不改变 Wanda 分数。因此，$\Omega(W_{ij})=|W_{ij}|\norm{x_j}_2$ 这一写法应理解为 backward-free saliency surrogate，而不是任意全局损失下对 $\Omega$ 的无条件等式。
+
+\section{条件 Epiplexity、熵与反演成功率}
+
+\subsection{总条件 MDL 的嵌套单调性}
+
+\begin{proposition}[资源有界的嵌套观测]
+设 $0<\rho_1\leq\rho_2\leq1$，$G_{\rho_1}$、$G_{\rho_2}$ 均由同一完整梯度事后掩码得到，且存在确定性投影
+\begin{equation}
+G_{\rho_1}=\pi_{1\leftarrow2}(G_{\rho_2}).
+\end{equation}
+若投影程序长度为 $K(\pi)$、运行时间为 $\tau_\pi$，则
+\begin{equation}
+\boxed{L_{T+\tau_\pi}(\rho_2)
+\leq L_T(\rho_1)+K(\pi)+O(1).}
+\label{eq:mdlmonotone}
+\end{equation}
+\end{proposition}
+
+\textit{证明：}取 $\rho_1$ 下的最优条件程序 $P^*_{\rho_1,T}$。构造复合程序
+\begin{equation}
+Q(X\mid G_{\rho_2},C)=
+P^*_{\rho_1,T}(X\mid\pi_{1\leftarrow2}(G_{\rho_2}),C).
+\end{equation}
+$Q$ 的描述长度至多增加 $K(\pi)+O(1)$，运行时间至多增加 $\tau_\pi$，且负对数似然与旧程序相同。新 MDL 最优值不大于该可行程序的码长，故式~\eqref{eq:mdlmonotone} 成立。证毕。
+
+若稀疏梯度按敏感度排序存储，使低保留率观测是高保留率观测的前缀，且投影开销可由同一预算吸收，则近似有 $L_T(\rho_2)\leq L_T(\rho_1)+O(1)$。普通 Shannon 条件熵在嵌套观测下单调不增（等号可以成立），但这一结论不能分别搬到 $S_T$ 和 $H_T$。
+
+一个重要对照是“在不同剪枝模型上重新计算梯度”：
+\begin{equation}
+\widetilde G^{\rm c}_\rho=\nabla_{W_\rho}L(W_\rho;x,y).
+\end{equation}
+此时共享坐标的梯度值也会随前向激活改变，通常不存在上述投影，连总 MDL 和最优攻击成功率都没有关于 $\rho$ 的普适单调性。
+
+\subsection{\texorpdfstring{$S_T$ 与 $H_T$ 为何可非单调}{S_T 与 H_T 为何可非单调}}
+
+由交叉熵分解，
+\begin{equation}
+\begin{split}
+H_T(\rho)=&\ H_{\rm Sh}(X\mid G_\rho,C)\\
+&+\E_{G_\rho,C}D_{\rm KL}
+\bigl(p(\cdot\mid G_\rho,C)\Vert
+P^*_{\rho,T}(\cdot\mid G_\rho,C)\bigr).
+\end{split}
+\label{eq:crossentropydecomp}
+\end{equation}
+第一项在嵌套条件下非增；第二项反映有限计算、模型失配与 MDL 模型选择，没有由 Shannon 单调性推出的方向保证。新增梯度可能使复杂逆映射值得学习，导致 $S_T$ 上升而 $H_T$ 大幅下降；也可能暴露一个简单解析逆，使 $S_T$ 和 $H_T$ 同时下降。为说明“总和单调”在逻辑上不能推出“分量单调”，考虑抽象 Pareto 点集：低保留率的可行 $(S,H)$ 点为 $(8,0)$、$(1,8)$，所选点为 $(8,0)$；高保留率保留旧点并新增 $(1,5)$，总和从 $8$ 降到 $6$，而所选 $H$ 从 $0$ 升到 $5$。反向地，从 $(1,9)$ 切换到 $(6,0)$ 会使 $S$ 上升、$H$ 下降。这是分量非单调的 Pareto 示意，不声称已构造完整前缀程序类中的全局最优反例。真实最优程序的切换仍可产生平台和跳跃。因此应同时报告 $(S_T,H_T,L_T)$ 及条件 MDL Pareto 前沿
+\begin{equation}
+R_{\rho,T}(s)=\inf_{\substack{P:\,\mathrm{time}(P)\leq T\\|P|\leq s}}
+\E[-\log_2P(X\mid G_\rho,C)].
+\end{equation}
+
+表~\ref{tab:regimes} 总结了合理但需实验检验的三种区间。
+
+\begin{table*}[t]
+\centering
+\caption{保留率变化下的条件信息分解：只有总 MDL 的条件单调性可证明，分量趋势均为假设；末列区分最优攻击与固定实现}
+\label{tab:regimes}
+\begin{tabularx}{\textwidth}{P{0.09\textwidth}P{0.27\textwidth}P{0.14\textwidth}P{0.16\textwidth}Y}
+\toprule
+区间 & MDL 最优观察者的典型行为 & $S_T(\rho)$ & $H_T(\rho)$ & 反演表现\\
+\midrule
+极低 $\rho$ & 忽略弱观测，主要使用数据先验 & 接近无梯度基线 & 接近无梯度基线 & 标签或轮廓不可辨，ASR 低\\
+阈值附近 & 开始投资于条件逆映射；关键坐标补齐约束 & 可上升、下降或跳变 & 常出现快速下降，但非定理 & ASR 可能阶跃；掩码侧信道最显著\\
+高 $\rho$ & 条件分布接近可识别；新增坐标主要提供冗余 & 若出现简单解析逆可下降，否则平台 & 趋向噪声/量化下限 & 按式~\eqref{eq:asrmono} 调整预算后最优 ASR 不降；固定 FLOPs 实现仍可非单调\\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\subsection{Jacobian 可识别性与相变}
+
+正式观测 $G_\rho$ 采用有限精度量化，量化映射本身几乎处处不可微。为分析局部可识别性，以下固定标签 $y$ 和局部支持集 $I_\rho$；这需要 Top-$k$ 的第 $k$ 与第 $k+1$ 个分数在当前点有正间隔，否则分析仅在分段固定的支持上成立。对量化前的连续数值通道定义
+\begin{equation}
+F_\rho(x\mid y)=G^{\rm c}_{I_\rho}(x,y),\qquad
+J_\rho(x\mid y)=\frac{\partial F_\rho(x\mid y)}{\partial x}.
+\end{equation}
+量化误差、传输噪声及模型失配统一并入后文的 $\eta$；离散 mask 侧信道不计入该 Jacobian。
+对平方梯度匹配目标
+\begin{equation}
+\mathcal L_\rho(z)=\tfrac12\norm{F_\rho(z\mid y)-F_\rho(x\mid y)}_2^2,
+\end{equation}
+在真值处有
+\begin{equation}
+\nabla_z^2\mathcal L_\rho(x)=J_\rho(x\mid y)^\top J_\rho(x\mid y).
+\label{eq:jacobian}
+\end{equation}
+若掩码嵌套，则
+\begin{equation}
+J_{\rho_2}^\top J_{\rho_2}
+=J_{\rho_1}^\top J_{\rho_1}+J_{\rm add}^\top J_{\rm add},
+\end{equation}
+故秩和最小特征值不下降。给定数值秩容差 $\tau>0$，定义逐样本局部可识别阈值（$d_x$ 为连续输入自由度）
+\begin{equation}
+\rho_{\rm id}(x,y;\tau)=
+\inf\{\rho:\sigma_{d_x}(J_\rho(x\mid y))\geq\tau\},
+\end{equation}
+约定观测维数不足 $d_x$ 时 $\sigma_{d_x}=0$，集合为空时下确界为 $+\infty$。
+并用分布分位数汇总
+\begin{equation}
+\rho_{\rm id}^{(\alpha)}(\tau)=
+\inf\{r:\Pr_{(x,y)}[\rho_{\rm id}(x,y;\tau)\leq r]\geq\alpha\}.
+\end{equation}
+在 $\rho<\rho_{\rm id}(x,y;\tau)$ 时存在数值上的一阶弱可见方向；跨过该点后，稳定局部逆可能突然出现。若 $\sigma_{\min}(J_\rho)>0$、Jacobian 局部 Lipschitz，且 $\widehat x$ 位于同一局部逆分支并满足小残差条件，则小观测误差 $\eta$ 下近似有
+\begin{equation}
+\norm{\widehat x-x}_2\lesssim
+\frac{\norm{\eta}_2}{\sigma_{\min}(J_\rho)}.
+\end{equation}
+秩亏不证明全局不可逆，但排除了这种一阶稳定逆。
+为定义实验中的 Jacobian 基线，记 $J_{\rm all}=\partial G^{\rm c}/\partial x$，其第 $k$ 行转置为 $j_k$，并用阻尼行 leverage
+\begin{equation}
+\ell_k(\lambda)=j_k^\top(J_{\rm all}^\top J_{\rm all}+\lambda I)^{-1}j_k,
+\;\lambda=10^{-6}(\norm{J_{\rm all}}_F^2/d_x+\epsilon_{\rm mach}).
+\label{eq:leverage}
+\end{equation}
+若用随机投影近似该量，固定随机种子并将计算开销单列。
+
+全连接层给出一个显式相变例子。在理想未量化情形，对单样本 $z=Wx+b$，令 $\delta=\partial L/\partial z$，则
+\begin{equation}
+\frac{\partial L}{\partial W}=\delta x^\top,
+\qquad
+\frac{\partial L}{\partial b}=\delta.
+\end{equation}
+只要掩码同时保留某个 $\delta_i\neq0$ 的偏置梯度和同一行权重梯度，即可解析恢复
+\begin{equation}
+x_j=\frac{\partial L/\partial W_{ij}}{\partial L/\partial b_i}.
+\label{eq:analyticinverse}
+\end{equation}
+有限精度下若 $\widetilde g^W_{ij}=\delta_ix_j+e^W$、$\widetilde g^b_i=\delta_i+e^b$ 且 $|e^b|<|\delta_i|$，比值估计满足
+\begin{equation}
+|\widehat x_j-x_j|\leq
+\frac{|e^W|+|x_j||e^b|}{|\delta_i|-|e^b|}.
+\end{equation}
+这说明加入很少的“关键行+偏置”就可能使 $H_T$ 和攻击难度发生离散变化，也与全连接层可解析反演的已有结论一致\cite{geiping2020inverting}。
+
+\subsection{与攻击成功率的操作性联系}
+
+令 $\mathcal A_{T,s}$ 表示所有允许随机化、程序长度不超过 $s$ 且运行时间不超过 $T$ 的攻击。以下把复合投影与攻击的固定包装开销吸收进 $K(\pi)$ 和 $\tau_\pi$。近似反演成功率定义为
+\begin{equation}
+\ASR_{T,s,\varepsilon}(\rho)=
+\sup_{A\in\mathcal A_{T,s}}
+\Pr[d(A(G_\rho,C),X)\leq\varepsilon].
+\end{equation}
+给定目标成功率 $\alpha$，再定义预算相关的算法阈值
+\begin{equation}
+\rho_{\rm alg}(T,s,\varepsilon,\alpha)
+:=\inf\{\rho:\ASR_{T,s,\varepsilon}(\rho)\geq\alpha\}.
+\end{equation}
+若目标成功率在 $\rho\leq1$ 内不可达，则记 $\rho_{\rm alg}=+\infty$。
+$\rho_{\rm id}(x,y;\tau)$ 是固定标签、固定支持和连续值通道的逐样本局部量，$\rho_{\rm alg}$ 则是包含实际 mask+values、标签可见性和攻击先验的分布级可达阈值。只有在同一批样本、同一标签可见性、固定公共 mask 及同一数值容差下，才把 $\rho_{\rm id}^{(\alpha)}(\tau)$ 与 $\rho_{\rm alg}(T,s,\varepsilon,\alpha)$ 配对比较；其他设置分别报告。强先验、量化和优化失败均使二者不必相等。
+在命题条件下，攻击者可先投影再复用旧攻击，因此
+\begin{equation}
+\ASR_{T+\tau_\pi,s+K(\pi),\varepsilon}(\rho_2)
+\geq\ASR_{T,s,\varepsilon}(\rho_1).
+\label{eq:asrmono}
+\end{equation}
+若前缀访问无额外成本，最优攻击成功率随 $\rho$ 非降。具体 DLG 或余弦攻击却可能在固定总 FLOPs 下非单调，因为观测坐标增多会提高单步代价、减少可执行步数，并改变条件数和合适的学习率。
+
+时间有界条件模型还给出一个直接但较弱的界。对有限离散样本空间（连续图像先按报告精度量化），条件于 $(G_\rho,C)$ 从 $P^*_{\rho,T}$ 独立采样 $\widetilde X$，则 Jensen 不等式给出
+\begin{equation}
+\Pr[\widetilde X=X]
+=\E P^*_{\rho,T}(X\mid G_\rho,C)
+\geq2^{-H_T(\rho)}.
+\label{eq:jensen}
+\end{equation}
+对精确匹配失真，包装采样器只需 $O(1)$ 额外代码和时间，故
+\begin{equation}
+\ASR_{T+O(1),S_T(\rho)+O(1),0}(\rho)
+\geq2^{-H_T(\rho)}.
+\end{equation}
+低 $H_T$ 因而只会抬高这一保证下界，并不保证实际碰撞概率或经验 ASR 单调提高。高 $H_T$ 也不排除另一个更长程序或不同失真目标下的攻击成功。$S_T$ 单独更不能作为隐私指标：简单无条件先验可同时具有低 $S_T$、高 $H_T$，简单解析逆则可具有低 $S_T$、低 $H_T$。
+
+\section{建议方法与实验协议}
+
+图~\ref{fig:framework} 给出完整审计流程。主设置先计算一份完整梯度，再做嵌套事后掩码，以检验理论命题；“剪枝模型上重算梯度”作为非嵌套对照。
+
+\begin{figure*}[t]
+\centering
+\resizebox{0.98\textwidth}{!}{\input{figures/framework.tikz}}
+\caption{敏感度稀疏梯度的计算受限泄漏审计框架。实线表示攻击与评价数据流，虚线表示条件编码支路；攻击器与条件编码器均受统一预算 $T$ 约束。二值掩码 $M_\rho$ 与量化后的保留值共同构成攻击观测。F/B-equivalent 表示一次前向--反向传播的等价计算量；实际稀疏训练的效用支路按表~\ref{tab:protocol} 单独测量，未在图中重复绘制。}
+\label{fig:framework}
+\end{figure*}
+
+\subsection{实验变量与基线}
+
+建议完整研究以 CIFAR-10/ResNet-18 为主实验，以 MNIST/LeNet 校验可计算 Hessian 与解析恢复，并以 Tiny-ImageNet 子集进行压力测试；这些实验尚未执行。保留率取
+\begin{equation}
+\rho\in\{0,.001,.01,.05,.1,.2,.5,1\},
+\end{equation}
+攻击预算用 F/B-equivalent FLOPs 计量，例如 $T\in\{128,512,2048,8192\}$。令 $F_{\rm ref}$ 为一次稠密受害模型前向加反向的 FLOPs，并定义 $T=F_{\rm attack}/F_{\rm ref}$。$F_{\rm attack}$ 计入稀疏观测读取与解码、投影或先验推理、条件特定的先验训练、全部梯度匹配前反向和优化器运算；客户端生成掩码的排序成本及最终指标计算不计入攻击预算，但作为防御开销单列。若预训练先验被声明为固定公共上下文，其一次性成本单列而不进入单样本 $T$；否则其权重码长计入 $s$、训练成本计入 $T$。任何按 $\rho$ 调参或训练的成本必须计入 $T$。每个 $\rho$ 都在相同累计 FLOPs 上限停止，故稀疏观测若降低单步成本，只能换取更多步数而不能获得额外总算力。这避免 L-BFGS closure 与 Adam 单步计算不等价的问题。
+
+表~\ref{tab:protocol} 给出必要比较。Taylor Top-$\rho$ 使用式~\eqref{eq:gradscore}。若把一次 SGD 虚拟更新 $U=-\eta G^{\rm c}$ 代入 Wanda，则得到明确标为变体的
+\begin{equation}
+q^{\rm Wan\text{-}upd}_{ij}=|\eta G^{\rm c}_{ij}|\norm{x_j}_2
+\propto |G^{\rm c}_{ij}|\norm{x_j}_2,
+\end{equation}
+它不是原始 Wanda。所有跨层分数应先逐层标准化，避免层尺度主导全局排序。随机基线由一个预注册的固定随机排列取前缀，使其随 $\rho$ 嵌套；$\rho=0$ 是显式的无梯度基线。
+
+\begin{table*}[t]
+\centering
+\caption{建议实验矩阵与主要目的}
+\label{tab:protocol}
+\begin{tabularx}{\textwidth}{P{0.12\textwidth}P{0.43\textwidth}Y}
+\toprule
+维度 & 水平 & 目的\\
+\midrule
+坐标规则 & Taylor $|W_kG^{\rm c}_k|$、Top-$|G^{\rm c}|$、Wanda-like $|G^{\rm c}_{ij}|\norm{x_j}_2$、Bottom、随机、逐层均衡、式~\eqref{eq:leverage} leverage & 区分训练敏感度、幅值、激活与输入可识别性\\
+观测内容 & values+mask、mask-only、固定公共 mask & 量化支持集侧信道\\
+梯度生成 & 同一完整梯度事后掩码、剪枝模型上重算 & 区分嵌套定理与非嵌套实践\\
+攻击 & DLG、iDLG、余弦匹配、GradInversion；稀疏自适应攻击 & 避免以单一弱攻击宣称安全\\
+场景 & batch $\in\{1,8,32\}$；训练早/中/晚期；标签与 BN 统计已知/未知 & 覆盖主要威胁模型\\
+泄漏指标 & ASR、PSNR、SSIM、LPIPS、标签恢复率、语义准确率、\mbox{两部码}与 prequential 码长 & 报告感知质量、结构信息和残余不确定性\\
+效用与开销 & 测试准确率/损失、达到目标精度的轮数、实际 mask+values 通信 bit、掩码生成 FLOPs & 构造效用--隐私--通信前沿\\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+图像重建使用 PSNR、SSIM\cite{wang2004ssim}、LPIPS\cite{zhang2018lpips} 和独立分类器 $f_{\rm cls}$ 的语义准确率。令 $\boldsymbol\kappa$ 表示下列三个数值阈值与语义标签要求，可预注册
+\begin{equation}
+\ASR_{\boldsymbol\kappa}=\frac1N\sum_{n=1}^N\mathbf 1
+\left[\begin{array}{c}
+\mathrm{PSNR}\geq20\,\mathrm{dB},\ \mathrm{SSIM}\geq0.5,\\
+\mathrm{LPIPS}\leq0.2,\ f_{\rm cls}(\widehat x_n)=y_n
+\end{array}\right],
+\end{equation}
+后续实验应另外报告阈值敏感性。若攻击器直接输出标签 $\widehat y$，另报 $\Pr(\widehat y=y)$，不与 $f_{\rm cls}(\widehat x)=y$ 混称。批量重建先按 LPIPS 代价做最优匹配。每个条件至少使用多个目标样本、3--5 个攻击随机种子，并分别报告平均种子与最强种子结果。主理论设置只审计同一梯度的事后掩码；为得到效用前沿，另在训练中实际应用 $M_\rho\odot\bar G$ 更新模型并报告表~\ref{tab:protocol} 的效用与通信指标。
+
+\subsection{条件 Epiplexity 的操作化估计}
+
+令 $C_0$ 只包含对所有 $(\rho,T)$ 完全相同的编码语言、量化规则、似然族、公共影子集 $\mathcal D_{\rm sh}$ 和通用基准分布 $P_0$。任何随 $(\rho,T)$ 变化的架构选择、超参数、权重或种子都不能作为免费 advice 进入 $C_0$。对每个条件，在影子选择集上固定唯一解码程序 $D^*_{\rho,T}$；其两部描述长度 $\ell(D^*_{\rho,T})$ 包含条件特定配置和量化权重。若不直接编码权重而由确定性训练器重建，则训练器、种子和配置计入码长，训练重放、概率求值与采样总时间共同满足 $T$。若 $\mathcal D_{\rm sh}$ 并非真实公共，则其存储与获取成本也必须计入。
+
+另取独立审计序列 $\mathcal D_N=\{(G_{\rho,n},X_n)\}_{n=1}^N$。同一 $D^*_{\rho,T}$ 产生可直接解释的两部码估计
+\begin{align}
+\widehat S_T^{\rm 2p}(\rho)&=\ell(D^*_{\rho,T}),\\
+\widehat H_T^{\rm ho}(\rho)&=-\sum_{n=1}^{N}
+\log_2P_{D^*_{\rho,T}}(X_n\mid G_{\rho,n},C_0),\\
+\widehat L_T^{\rm 2p}(\rho)&=\widehat S_T^{\rm 2p}(\rho)+
+\widehat H_T^{\rm ho}(\rho).
+\label{eq:twopart}
+\end{align}
+这三个量共用同一程序和审计序列；不允许为 $S/H/L$ 各自重选配置。对 8-bit 图像使用归一化的离散 logistic 或 categorical 似然。
+
+作为总码长的稳健性检查，再将 $\mathcal D_N$ 按预注册顺序分为 $R$ 个块 $B_1,\ldots,B_R$。$P_{r-1}$ 只用 $\mathcal D_{\rm sh}$ 和先前块，在 $T$ 内完成训练、求值与采样，当前整块在更新前编码，得到
+\begin{equation}
+\widehat L_T^{\rm pre}(\rho)=
+-\sum_{r=1}^{R}\sum_{n\in B_r}
+\log_2P_{r-1}(X_n\mid G_{\rho,n},C_0).
+\label{eq:preqL}
+\end{equation}
+该一部码只作 $L_T$ 代理；不再与另一交叉拟合损失相减并把差值误称为程序长度。同时报告式~\eqref{eq:twopart} 和式~\eqref{eq:preqL} 的总 bit，以及除以同一 $N$ 倍像素数后的 bits/pixel。它们仍是受限模型族中的操作性代理；在小子集上再用 requential coding 审计排序稳健性\cite{finzi2026epiplexity}。梯度匹配攻击的损失面积只作优化诊断，不标为 prequential 或 epiplexity。
+
+主统计量包括：$\widehat H_T^{\rm ho}$ 与 ASR/LPIPS 的 Spearman 相关、匹配威胁模型下 $\rho_{\rm id}^{(\alpha)}(\tau)$ 与经验 $\widehat\rho_{\rm alg}(T)$ 的差异、ASR 的 change-point 检验、Jacobian 的数值秩与 $\lambda_{\min}$，以及跨样本 bootstrap 95\% 置信区间。应报告完整 $\rho\times T$ 热图，而不是只选一个攻击预算。
+
+\subsection{可证伪假设}
+
+\begin{enumerate}
+  \item \textbf{H1（总 MDL）：}在嵌套事后掩码下，$\widehat L_T^{\rm 2p}(\rho)$ 与 $\widehat L_T^{\rm pre}(\rho)$ 随 $\rho$ 近似非增；系统性违背提示预算或估计器未对齐。
+  \item \textbf{H2（相变）：}在标签已知、固定公共 mask 和弱图像先验的配对设置中，经验 $\widehat\rho_{\rm alg}(T)$ 接近 $\rho_{\rm id}^{(\alpha)}(\tau)$；增加最优攻击预算后，$\widehat\rho_{\rm alg}(T)$ 非增。
+  \item \textbf{H3（分量切换）：}$\widehat S_T^{\rm 2p}(\rho)$ 可在攻击起效前后出现峰值或阶跃，而非单调下降。
+  \item \textbf{H4（敏感度对齐）：}仅当 $|W_kG^{\rm c}_k|$ 与 $\ell_k(\lambda)$ 正相关时，敏感度 Top-$\rho$ 才比随机规则更早降低 $\widehat H_T^{\rm ho}$。
+  \item \textbf{H5（支持集泄漏）：}样本相关的 $M_\rho$ 单独即可降低 $\widehat L_T^{\rm 2p}$；固定公共掩码会削弱该效应。
+\end{enumerate}
+
+\section{扩展：Epiplexity 引导的记忆管理}
+
+上述框架可迁移到 KV cache、经验回放样本或优化器状态的内存分配。设候选记忆单元为 $Z_1,\ldots,Z_m$，字节成本为 $b_i$，下游目标为 $Y$。在预算 $B$ 下，可保留对时间有界可预测性贡献最大的集合
+\begin{multline}
+\max_{A\subseteq[m]}
+\left\{\MDL_T(Y\mid C)-\MDL_T(Y\mid Z_A,C)\right\},\\
+\text{s.t. }\sum_{i\in A}b_i\leq B.
+\label{eq:memory}
+\end{multline}
+其边际收益除以字节数，可作为结构信息密度。若同时关心隐私，可用多目标式
+\begin{equation}
+\max_A\ \Delta_T^{\rm task}(A)-\lambda\Delta_T^{\rm private}(A)
+\quad\text{s.t. }\sum_{i\in A}b_i\leq B.
+\end{equation}
+这与“高训练敏感度不必等于高泄漏价值”的结论一致：记忆管理应同时衡量任务结构增益和私有条件 MDL 增益，而不是只按幅值保留。
+
+\section{讨论与局限}
+
+第一，式~\eqref{eq:taylorbound} 只控制局部余项。完全置零可能跨越多个 ReLU 激活区域；此时起点梯度无法完整描述有限变化。第二，Wanda 与 Taylor 的联系依赖逐输出行比较和方向近似。其精确含义是层输出扰动，不是任意任务损失。第三，epiplexity 的程序搜索不可计算，神经网络编码器只给出受限模型族中的代理值。不同架构、量化方式和公共先验会改变 $S_T/H_T$ 分解。
+
+第四，固定攻击预算必须包含输入读取、离线先验训练和每步梯度匹配成本。若把预训练生成模型视为免费公共上下文，所得 $H_T$ 与不允许该先验的观察者不可直接比较。第五，低经验 ASR 只能说明测试攻击在给定配置下失败，不能证明隐私；稀疏梯度可能被自适应攻击利用\cite{dimitrov2024spear}。需要形式化保证时仍应采用差分隐私等机制，并单独评估效用代价。
+
+\section{结论}
+
+剪枝损失的一阶近似可以严格写成带二阶余项的 Taylor 公式。在线性层中，Wanda 分数在逐输出行内对含共同反传因子的 Cauchy--Schwarz 上界排序，因而可作为 backward-free 代理；在固定校准激活且仅删除一个权重时，它还精确度量局部输出扰动。对敏感度 Top-$\rho$ 梯度，增加保留率只能保证总条件时间有界 MDL 在嵌套和投影开销条件下不增加；$S_T$ 与 $H_T$ 各自可能因最优条件程序切换而上升、下降或跳变。攻击风险由观测信息、逆映射的可识别性和预算内计算三者共同决定。本文给出的 $\rho\times T$ 协议把这些因素分开测量，可用于检验“重要梯度是否泄漏更多”，也可扩展为任务效用与隐私风险共同约束的记忆管理原则。
+
+\noindent\textbf{声明：}本文为理论分析与实验方案，不包含新采集数据；建议实验仅使用公开或获授权数据，并在隔离环境中开展。这份公开研究笔记由既有理论稿整理而来；整理与示例代码开发使用了生成式 AI 辅助。文中的形式化结论应按其明确假设理解，尚不代表独立同行评审认证。贡献者应逐式复核并对其提交负责。
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

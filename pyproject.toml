@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pruning-gradient-privacy-lab"
+version = "1.0.0"
+description = "Reproducible NumPy demonstrations of pruning sensitivity and synthetic gradient leakage"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{name = "Project contributors"}]
+dependencies = ["numpy>=1.26,<3"]
+keywords = ["pruning", "gradient-inversion", "wanda", "privacy", "education"]
+classifiers = ["Programming Language :: Python :: 3", "Topic :: Scientific/Engineering :: Artificial Intelligence"]
+
+[project.urls]
+Repository = "https://github.com/BoomShuai/pruning-gradient-privacy-lab"
+Issues = "https://github.com/BoomShuai/pruning-gradient-privacy-lab/issues"
+
+[project.scripts]
+pruning-gradient-privacy = "pruning_gradient_privacy.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this teaching lab, please cite this repository and the relevant original papers."
+title: "Pruning Gradient Privacy Lab"
+authors:
+  - name: "Pruning Gradient Privacy Lab contributors"
+version: 1.0.0
+date-released: 2026-11-15
+url: "https://github.com/BoomShuai/pruning-gradient-privacy-lab"
+repository-code: "https://github.com/BoomShuai/pruning-gradient-privacy-lab"
+license: MIT
+abstract: "A NumPy teaching lab for Taylor pruning bounds, Wanda output perturbations, and synthetic linear-regression gradient reconstruction, accompanied by Chinese theoretical research notes."
+keywords:
+  - pruning
+  - gradient-inversion
+  - numpy
+  - reproducibility

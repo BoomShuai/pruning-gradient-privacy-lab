@@ -1,0 +1,29 @@
+\begin{tikzpicture}[
+  x=1cm,y=1cm,
+  node distance=5mm,
+  >={Latex[length=2.0mm,width=1.4mm]},
+  flow/.style={->,line width=0.85pt,draw=black!78},
+  theoryflow/.style={->,line width=0.85pt,dashed,draw=black!72},
+  box/.style={draw=black!72,line width=0.75pt,rounded corners=1.5pt,
+              align=center,minimum height=1.30cm,inner sep=4pt,font=\footnotesize},
+  data/.style={box,fill=blue!10,minimum width=2.55cm},
+  compute/.style={box,fill=orange!16,minimum width=3.00cm},
+  sparse/.style={box,fill=green!12,minimum width=3.05cm},
+  attack/.style={box,fill=red!10,minimum width=3.15cm},
+  theory/.style={box,fill=purple!10,minimum width=3.15cm},
+  output/.style={box,fill=gray!13,minimum width=2.95cm}
+]
+  \node[data] (sample) at (0,0) {私有记录 $X$\\公共上下文 $C$};
+  \node[compute] (gradient) at (3.35,0) {梯度与敏感度\\$G^{\rm c}=\nabla_W L(W;x,y)$\\$q_k=|W_kG^{\rm c}_k|$};
+  \node[sparse] (mask) at (7.05,0) {嵌套 Top-$\rho$ 观测\\$G_\rho=(M_\rho,M_\rho\odot Q_b(G^{\rm c}))$\\保留索引与量化值};
+  \node[attack] (inverse) at (10.95,1.12) {$T$-受限反演\\DLG / iDLG / 余弦匹配\\$\widehat X=A_{T,s}(G_\rho,C)$};
+  \node[theory] (coder) at (10.95,-1.12) {条件编码观察者\\$P_{\rho,T}^*(X\mid G_\rho,C)$\\估计 $S_T$、$H_T$ 与 $L_T$};
+  \node[output] (audit) at (14.85,0) {$\rho\!\times\!T$ 审计图谱\\ASR, PSNR, SSIM, LPIPS\\$\widehat S_T,\widehat H_T,\widehat L_T$，通信 bit\\相变与计算--泄漏前沿};
+
+  \draw[flow] (sample) -- (gradient);
+  \draw[flow] (gradient) -- (mask);
+  \draw[flow] (mask.east) -- ++(0.35,0) |- (inverse.west);
+  \draw[theoryflow] (mask.east) -- ++(0.35,0) |- (coder.west);
+  \draw[flow] (inverse.east) -- ++(0.35,0) |- (audit.west);
+  \draw[theoryflow] (coder.east) -- ++(0.35,0) |- (audit.west);
+\end{tikzpicture}
