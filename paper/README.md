@@ -17,6 +17,15 @@ latexmk -cd -xelatex -interaction=nonstopmode -halt-on-error -outdir=../build/pa
 
 输出位于 `build/paper/notes.pdf`；构建目录已被 Git 忽略。图示源文件为 `figures/framework.tikz`，参考文献为 `references.bib`。代码 CI 不安装 TeX Live，也不代表此文稿已通过排版或数学证明的完整审计。
 
+也可使用 Tectonic 0.17.0（首次构建会联网下载 TeX 依赖）：
+
+```bash
+mkdir -p build/paper
+tectonic --outdir build/paper --keep-logs paper/notes.tex
+```
+
+公开版已用 Tectonic 0.17.0 完成编译，并检查了全部 7 页。编译后的脱敏 PDF 随 [v1.0.0 Release](https://github.com/BoomShuai/pruning-gradient-privacy-lab/releases/tag/v1.0.0) 提供。数值代码与文稿检查范围见 [验证记录](../docs/validation.md)。
+
 ## 许可证
 
 原创文字与图示按 [CC BY 4.0](../docs/LICENSE-CC-BY-4.0.md) 发布。第三方参考文献和 TeX 依赖遵循其各自许可证。生成式 AI 参与文档整理与审查，该使用方式已在文稿中披露。

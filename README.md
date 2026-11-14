@@ -43,7 +43,7 @@ pruning-gradient-privacy run --output outputs/demo --seed 42
 
 仓库提供一份真实运行生成的 [seed 42 示例报告](examples/seed42/report.md) 与 [SVG 结果图](examples/seed42/reconstruction.svg)，对应配置记录在 [results.json](examples/seed42/results.json) 中。
 
-这些文件属于本次运行产物，默认不提交到 Git。相同配置和种子产生可重复的结果；跨 NumPy 版本或硬件的浮点运算可能存在微小差异。
+新运行结果建议放在已被 Git 忽略的 `outputs/` 中；`examples/seed42/` 是随仓库提交的参考示例。相同配置和种子产生可重复的结果；跨 NumPy 版本或硬件的浮点运算可能存在微小差异。
 
 自定义实验：
 
@@ -65,6 +65,7 @@ python -m unittest discover -s tests -v
 - [数学与实验定义](docs/experiments.md)
 - [公开研究笔记源码](paper/notes.tex) · [编译说明](paper/README.md)
 - [内容来源与参考文献核对范围](docs/provenance.md)
+- [v1.0.0 验证记录](docs/validation.md)
 - [数据边界](docs/data-boundaries.md) · [贡献说明](CONTRIBUTING.md)
 
 该项目从既有理论稿整理而来，增加了独立实现的数值验证与合成实验。生成式 AI 参与了文档整理、代码开发和审查；测试及示例只支持其明确覆盖的行为。
